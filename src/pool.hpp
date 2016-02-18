@@ -84,10 +84,10 @@ private:
   void maybe_spawn_connection();
 
   // Connection listener methods
-  virtual void on_ready(Connection* connection);
-  virtual void on_close(Connection* connection);
-  virtual void on_availability_change(Connection* connection);
-  virtual void on_event(EventResponse* response) {}
+  virtual void on_connection_ready(Connection* connection);
+  virtual void on_connection_close(Connection* connection);
+  virtual void on_connection_availability_change(Connection* connection);
+  virtual void on_connection_event(EventResponse* response) {}
 
   static void on_pending_request_timeout(Timer* timer);
   static void on_partial_reconnect(Timer* timer);

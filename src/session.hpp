@@ -18,7 +18,7 @@
 #define __CASS_SESSION_HPP_INCLUDED__
 
 #include "config.hpp"
-#include "control_connection.hpp"
+#include "cluster.hpp"
 #include "event_thread.hpp"
 #include "future.hpp"
 #include "host.hpp"
@@ -64,7 +64,7 @@ struct SessionEvent {
   Address address;
 };
 
-class Session : public EventThread<SessionEvent> {
+class Session {
 public:
   enum State {
     SESSION_STATE_CONNECTING,
@@ -76,82 +76,60 @@ public:
   Session();
   ~Session();
 
-  const Config& config() const { return config_; }
-  Metrics* metrics() const { return metrics_.get(); }
+  const Config& config() const { return cluster_->config(); }
 
-  void set_load_balancing_policy(LoadBalancingPolicy* policy) {
-    load_balancing_policy_.reset(policy);
-  }
+  Metrics* metrics() const { return cluster_->metrics(); }
 
   void broadcast_keyspace_change(const std::string& keyspace,
                                  const IOWorker* calling_io_worker);
 
-  SharedRefPtr<Host> get_host(const Address& address);
-
-  bool notify_ready_async();
+  bool notify_worker_ready_async();
   bool notify_worker_closed_async();
   bool notify_up_async(const Address& address);
   bool notify_down_async(const Address& address);
 
-  void connect_async(const Config& config, const std::string& keyspace, Future* future);
+  void connect_async(const SharedRefPtr<Cluster>& cluster, const std::string& keyspace, Future* future);
   void close_async(Future* future, bool force = false);
 
   Future* prepare(const char* statement, size_t length);
   Future* execute(const RoutableRequest* statement);
 
-  const Metadata& metadata() const { return metadata_; }
+  const Metadata& metadata() const { return cluster_->metadata(); }
 
   int protocol_version() const {
-    return control_connection_.protocol_version();
+    return cluster_->protocol_version();
   }
 
+  void on_add(const SharedRefPtr<Host>& host);
+  void on_remove(const SharedRefPtr<Host>& host);
+  void on_up(const SharedRefPtr<Host>& host);
+  void on_down(const SharedRefPtr<Host>& host, bool cancel_reconnect);
+
+  void on_ready(const SharedRefPtr<Host>& connected_host, const HostMap& hosts);
+  void on_error(CassError code, const std::string& message);
+
+  void on_worker_ready();
+  bool on_worker_closed();
+
+  void on_close();
+
 private:
-  void clear(const Config& config);
+  void clear(const SharedRefPtr<Cluster>& cluster);
   int init();
 
-  void close_handles();
-
-  void internal_connect();
-  void internal_close();
-
-  void notify_connected();
-  void notify_connect_error(CassError code, const std::string& message);
-  void notify_closed();
+  void close();
 
   void execute(RequestHandler* request_handler);
 
-  virtual void on_run();
-  virtual void on_after_run();
-  virtual void on_event(const SessionEvent& event);
-
-  static void on_resolve(Resolver* resolver);
-
+#if 0
 #if UV_VERSION_MAJOR == 0
   static void on_execute(uv_async_t* data, int status);
 #else
   static void on_execute(uv_async_t* data);
 #endif
-
-  QueryPlan* new_query_plan(const Request* request = NULL, Request::EncodingCache* cache = NULL);
+#endif
 
   void on_reconnect(Timer* timer);
-
-private:
-  // TODO(mpenick): Consider removing friend access to session
-  friend class ControlConnection;
-
-  SharedRefPtr<Host> add_host(const Address& address);
-  void purge_hosts(bool is_initial_connection);
-
-  Metadata& metadata() { return metadata_; }
-
-  void on_control_connection_ready();
-  void on_control_connection_error(CassError code, const std::string& message);
-
-  void on_add(SharedRefPtr<Host> host, bool is_initial_connection);
-  void on_remove(SharedRefPtr<Host> host);
-  void on_up(SharedRefPtr<Host> host);
-  void on_down(SharedRefPtr<Host> host);
 
 private:
   typedef std::vector<SharedRefPtr<IOWorker> > IOWorkerVec;
@@ -159,24 +137,13 @@ private:
   Atomic<State> state_;
   uv_mutex_t state_mutex_;
 
-  Config config_;
-  ScopedPtr<Metrics> metrics_;
-  ScopedRefPtr<LoadBalancingPolicy> load_balancing_policy_;
+  SharedRefPtr<Cluster> cluster_;
   ScopedRefPtr<Future> connect_future_;
   ScopedRefPtr<Future> close_future_;
 
-  HostMap hosts_;
-  uv_mutex_t hosts_mutex_;
-
   IOWorkerVec io_workers_;
-  ScopedPtr<AsyncQueue<MPMCQueue<RequestHandler*> > > request_queue_;
-  Metadata metadata_;
-  ControlConnection control_connection_;
-  bool current_host_mark_;
+  ScopedPtr<MPMCQueue<RequestHandler*> > request_queue_;
   int pending_resolve_count_;
-  int pending_pool_count_;
-  int pending_workers_count_;
-  int current_io_worker_;
 };
 
 class SessionFuture : public Future {

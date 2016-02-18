@@ -411,7 +411,7 @@ void Connection::set_state(ConnectionState new_state) {
 
   // Only change the availability if the state changes to/from being ready
   if (new_state == CONNECTION_STATE_READY || old_state == CONNECTION_STATE_READY) {
-    listener_->on_availability_change(this);
+    listener_->on_connection_availability_change(this);
   }
 }
 
@@ -440,7 +440,7 @@ void Connection::consume(char* input, size_t size) {
 
       if (response->stream() < 0) {
         if (response->opcode() == CQL_OPCODE_EVENT) {
-          listener_->on_event(static_cast<EventResponse*>(response->response_body().get()));
+          listener_->on_connection_event(static_cast<EventResponse*>(response->response_body().get()));
         } else {
           notify_error("Invalid response opcode for event stream: " +
                        opcode_to_string(response->opcode()));
@@ -566,7 +566,7 @@ void Connection::on_close(uv_handle_t* handle) {
     delete pending_schema_aggreement;
   }
 
-  connection->listener_->on_close(connection);
+  connection->listener_->on_connection_close(connection);
 
   delete connection;
 }
@@ -774,7 +774,7 @@ void Connection::notify_ready() {
   connect_timer_.stop();
   restart_heartbeat_timer();
   set_state(CONNECTION_STATE_READY);
-  listener_->on_ready(this);
+  listener_->on_connection_ready(this);
 }
 
 void Connection::notify_error(const std::string& message, ConnectionError code) {

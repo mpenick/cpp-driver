@@ -84,10 +84,12 @@ uint64_t get_time_since_epoch_in_ms() {
 }
 
 uint64_t get_host_latency_average(CassSession* session, std::string ip_address, int port) {
-  Address address;
-  if (Address::from_string(ip_address, port, &address)) {
-    return session->get_host(address)->get_current_average().average;
-  }
+  // TODO(mpenick): fix this
+  //Address address;
+  //if (Address::from_string(ip_address, port, &address)) {
+  //  return session->get_host(address)->get_current_average().average;
+  //}
+  //return 0;
   return 0;
 }
 

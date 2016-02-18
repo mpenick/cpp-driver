@@ -26,6 +26,8 @@
 #include "metrics.hpp"
 #include "spsc_queue.hpp"
 #include "timer.hpp"
+#include "host.hpp"
+#include "load_balancing.hpp"
 
 #include <map>
 #include <string>
@@ -43,6 +45,7 @@ class Timer;
 struct IOWorkerEvent {
   enum Type {
     INVALID,
+    READY,
     ADD_POOL,
     REMOVE_POOL
   };
@@ -51,8 +54,9 @@ struct IOWorkerEvent {
     : type(INVALID) {}
 
   Type type;
+  SharedRefPtr<Host> connected_host;
+  HostMap hosts;
   Address address;
-  bool is_initial_connection;
   bool cancel_reconnect;
 };
 
@@ -61,6 +65,7 @@ class IOWorker
     , public RefCounted<IOWorker> {
 public:
   enum State {
+    IO_WORKER_STATE_NEW,
     IO_WORKER_STATE_READY,
     IO_WORKER_STATE_CLOSING,
     IO_WORKER_STATE_CLOSED
@@ -71,17 +76,18 @@ public:
 
   int init();
 
-  bool is_closing() const { return state_ == IO_WORKER_STATE_CLOSING; }
-  bool is_ready() const { return state_ == IO_WORKER_STATE_READY; }
+  bool is_closing() const { return state_.load() == IO_WORKER_STATE_CLOSING; }
+  bool is_closed() const { return state_.load() == IO_WORKER_STATE_CLOSED; }
+  bool is_ready() const { return state_.load() == IO_WORKER_STATE_READY; }
 
   const Config& config() const { return config_; }
   Metrics* metrics() const { return metrics_; }
 
   int protocol_version() const {
-    return protocol_version_.load();
+    return protocol_version_;
   }
   void set_protocol_version(int protocol_version) {
-    protocol_version_.store(protocol_version);
+    protocol_version_ = protocol_version;
   }
 
   std::string keyspace();
@@ -95,7 +101,8 @@ public:
 
   bool is_host_up(const Address& address) const;
 
-  bool add_pool_async(const Address& address, bool is_initial_connection);
+  bool ready_async(const SharedRefPtr<Host>& connected_host, const HostMap& hosts);
+  bool add_pool_async(const Address& address);
   bool remove_pool_async(const Address& address, bool cancel_reconnect);
   void close_async();
 
@@ -134,11 +141,11 @@ private:
   void schedule_reconnect(const Address& address);
 
 private:
-  State state_;
+  Atomic<State> state_;
   Session* session_;
   const Config& config_;
   Metrics* metrics_;
-  Atomic<int> protocol_version_;
+  int protocol_version_;
   uv_prepare_t prepare_;
 
   std::string keyspace_;
@@ -151,7 +158,9 @@ private:
   PoolVec pools_pending_flush_;
   bool is_closing_;
   int pending_request_count_;
+  int pending_pool_count_;
 
+  ScopedRefPtr<LoadBalancingPolicy> load_balancing_policy_;
   AsyncQueue<SPSCQueue<RequestHandler*> > request_queue_;
 };
 

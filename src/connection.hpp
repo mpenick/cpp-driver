@@ -81,11 +81,10 @@ public:
       event_types_ = event_types;
     }
 
-    virtual void on_ready(Connection* connection) = 0;
-    virtual void on_close(Connection* connection) = 0;
-    virtual void on_availability_change(Connection* connection) = 0;
-
-    virtual void on_event(EventResponse* response) = 0;
+    virtual void on_connection_ready(Connection* connection) = 0;
+    virtual void on_connection_close(Connection* connection) = 0;
+    virtual void on_connection_availability_change(Connection* connection) = 0;
+    virtual void on_connection_event(EventResponse* response) = 0;
 
   private:
     int event_types_;

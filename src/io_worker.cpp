@@ -27,12 +27,14 @@
 namespace cass {
 
 IOWorker::IOWorker(Session* session)
-    : state_(IO_WORKER_STATE_READY)
+    : state_(IO_WORKER_STATE_NEW)
     , session_(session)
     , config_(session->config())
     , metrics_(session->metrics())
     , protocol_version_(-1)
     , pending_request_count_(0)
+    , pending_pool_count_(0)
+    , load_balancing_policy_(config_.load_balancing_policy()->new_instance())
     , request_queue_(config_.queue_size_io()) {
   prepare_.data = this;
   uv_mutex_init(&keyspace_mutex_);
@@ -102,11 +104,18 @@ bool IOWorker::is_host_available(const Address& address) {
   return unavailable_addresses_.count(address) == 0;
 }
 
-bool IOWorker::add_pool_async(const Address& address, bool is_initial_connection) {
+bool IOWorker::ready_async(const SharedRefPtr<Host>& connected_host, const HostMap& hosts) {
+  IOWorkerEvent event;
+  event.type = IOWorkerEvent::READY;
+  event.connected_host = connected_host;
+  event.hosts = hosts;
+  return send_event_async(event);
+}
+
+bool IOWorker::add_pool_async(const Address& address) {
   IOWorkerEvent event;
   event.type = IOWorkerEvent::ADD_POOL;
   event.address = address;
-  event.is_initial_connection = is_initial_connection;
   return send_event_async(event);
 }
 
@@ -125,7 +134,7 @@ void IOWorker::close_async() {
 }
 
 void IOWorker::add_pool(const Address& address, bool is_initial_connection) {
-  if (!is_ready()) return;
+  if (is_closing() || is_closed()) return;
 
   PoolMap::iterator it = pools_.find(address);
   if (it == pools_.end()) {
@@ -185,7 +194,10 @@ void IOWorker::request_finished(RequestHandler* request_handler) {
 
 void IOWorker::notify_pool_ready(Pool* pool) {
   if (pool->is_initial_connection()) {
-    session_->notify_ready_async();
+    if (--pending_pool_count_ <= 0) {
+      state_.store(IO_WORKER_STATE_READY);
+      session_->notify_worker_ready_async();
+    }
   } else if (is_ready() && pool->is_ready()){
     session_->notify_up_async(pool->address());
   }
@@ -242,7 +254,7 @@ void IOWorker::maybe_close() {
 
 void IOWorker::maybe_notify_closed() {
   if (is_closing() && pools_.empty()) {
-    state_ = IO_WORKER_STATE_CLOSED;
+    state_.store(IO_WORKER_STATE_CLOSED);
     session_->notify_worker_closed_async();
     close_handles();
   }
@@ -258,8 +270,18 @@ void IOWorker::close_handles() {
 
 void IOWorker::on_event(const IOWorkerEvent& event) {
   switch (event.type) {
+    case IOWorkerEvent::READY: {
+      load_balancing_policy_->init(event.connected_host, event.hosts);
+      pending_pool_count_ = event.hosts.size();
+      for (HostMap::const_iterator it = event.hosts.begin(),
+           end = event.hosts.end(); it != end; ++it) {
+        add_pool(it->first, true);
+      }
+      break;
+    }
+
     case IOWorkerEvent::ADD_POOL: {
-      add_pool(event.address, event.is_initial_connection);
+      add_pool(event.address, false);
       break;
     }
 
@@ -296,7 +318,7 @@ void IOWorker::on_execute(uv_async_t* async) {
       request_handler->set_io_worker(io_worker);
       request_handler->retry();
     } else {
-      io_worker->state_ = IO_WORKER_STATE_CLOSING;
+      io_worker->state_.store(IO_WORKER_STATE_CLOSING);
     }
     remaining--;
   }

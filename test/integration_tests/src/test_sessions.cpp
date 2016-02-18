@@ -326,9 +326,9 @@ struct SessionContainer {
   /**
    * Cluster instance
    */
-  const CassCluster* cluster;
+  CassCluster* cluster;
 
-  SessionContainer(const CassCluster* cluster)
+  SessionContainer(CassCluster* cluster)
     : cluster(cluster) {
     BOOST_REQUIRE(uv_rwlock_init(&sessions_lock) == 0);
   }

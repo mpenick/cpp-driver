@@ -1438,7 +1438,7 @@ cass_session_free(CassSession* session);
  */
 CASS_EXPORT CassFuture*
 cass_session_connect(CassSession* session,
-                     const CassCluster* cluster);
+                     CassCluster* cluster);
 
 /**
  * Connects a session and sets the keyspace.
@@ -1454,7 +1454,7 @@ cass_session_connect(CassSession* session,
  */
 CASS_EXPORT CassFuture*
 cass_session_connect_keyspace(CassSession* session,
-                              const CassCluster* cluster,
+                              CassCluster* cluster,
                               const char* keyspace);
 
 /**
@@ -1473,7 +1473,7 @@ cass_session_connect_keyspace(CassSession* session,
  */
 CASS_EXPORT CassFuture*
 cass_session_connect_keyspace_n(CassSession* session,
-                                const CassCluster* cluster,
+                                CassCluster* cluster,
                                 const char* keyspace,
                                 size_t keyspace_length);
 

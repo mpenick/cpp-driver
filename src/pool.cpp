@@ -284,7 +284,7 @@ Connection* Pool::find_least_busy() {
   return NULL;
 }
 
-void Pool::on_ready(Connection* connection) {
+void Pool::on_connection_ready(Connection* connection) {
   connections_pending_.erase(connection);
   connections_.push_back(connection);
   return_connection(connection);
@@ -294,7 +294,7 @@ void Pool::on_ready(Connection* connection) {
   metrics_->total_connections.inc();
 }
 
-void Pool::on_close(Connection* connection) {
+void Pool::on_connection_close(Connection* connection) {
   connections_pending_.erase(connection);
 
   ConnectionVec::iterator it =
@@ -326,7 +326,7 @@ void Pool::on_close(Connection* connection) {
   }
 }
 
-void Pool::on_availability_change(Connection* connection) {
+void Pool::on_connection_availability_change(Connection* connection) {
   if (connection->is_available()) {
     ++available_connection_count_;
     set_is_available(true);

@@ -18,7 +18,7 @@
 
 #include "address.hpp"
 #include "connection.hpp"
-#include "control_connection.hpp"
+#include "cluster.hpp"
 #include "error_response.hpp"
 #include "get_time.hpp"
 #include "logger.hpp"
@@ -79,7 +79,7 @@ bool SchemaChangeHandler::has_schema_agreement(const ResponseVec& responses) {
 
     Address address;
     bool is_valid_address
-        = ControlConnection::determine_address_for_peer_host(connection()->address(),
+        = Cluster::determine_address_for_peer_host(connection()->address(),
                                                              row->get_by_name("peer"),
                                                              row->get_by_name("rpc_address"),
                                                              &address);
