@@ -112,13 +112,18 @@ CassCluster* create_cluster() {
   cass_cluster_set_queue_size_io(cluster, 10000);
   cass_cluster_set_pending_requests_low_water_mark(cluster, 5000);
   cass_cluster_set_pending_requests_high_water_mark(cluster, 10000);
+  cass_cluster_set_write_bytes_low_water_mark(cluster, 1024*1024);
+  cass_cluster_set_write_bytes_high_water_mark(cluster, 2*1024*1024);
   cass_cluster_set_core_connections_per_host(cluster, 1);
-  cass_cluster_set_max_connections_per_host(cluster, 2);
+  cass_cluster_set_max_connections_per_host(cluster, 1);
   cass_cluster_set_max_requests_per_flush(cluster, 10000);
+  cass_cluster_set_load_balance_round_robin(cluster);
+  cass_cluster_set_latency_aware_routing(cluster, cass_false);
+  cass_cluster_set_token_aware_routing(cluster, cass_false);
   return cluster;
 }
 
-CassError connect_session(CassSession* session, const CassCluster* cluster) {
+CassError connect_session(CassSession* session, CassCluster* cluster) {
   CassError rc = CASS_OK;
   CassFuture* future = cass_session_connect_keyspace(session, cluster, "examples");
 
@@ -268,7 +273,7 @@ void select_from_perf(CassSession* session, const char* query, const CassPrepare
       print_error(future);
     } else {
       const CassResult* result = cass_future_get_result(future);
-      assert(cass_result_column_count(result) == 6);
+      assert(cass_result_column_count(result) == 5);
       cass_result_free(result);
     }
     cass_future_free(future);

@@ -139,6 +139,9 @@ namespace cass {
 Session::Session()
     : state_(SESSION_STATE_CLOSED)
     , pending_resolve_count_(0) {
+  for (size_t i = 0; i < 41; ++i) {
+    io_worker_counters[i].store(0);
+  }
   uv_mutex_init(&state_mutex_);
 }
 
@@ -153,6 +156,8 @@ void Session::clear(const SharedRefPtr<Cluster>& cluster) {
   close_future_.reset();
   io_workers_.clear();
   request_queue_.reset(
+        new MPMCQueue<RequestHandler*>(cluster->config().queue_size_io()));
+  overwhelmed_request_queue_.reset(
         new MPMCQueue<RequestHandler*>(cluster->config().queue_size_io()));
   pending_resolve_count_ = 0;
 }
@@ -256,10 +261,16 @@ void Session::execute(RequestHandler* request_handler) {
   if (state_.load(MEMORY_ORDER_ACQUIRE) != SESSION_STATE_CONNECTED) {
     request_handler->on_error(CASS_ERROR_LIB_NO_HOSTS_AVAILABLE,
                               "Session is not connected");
+    return;
   } else if (!request_queue_->enqueue(request_handler)) {
     request_handler->on_error(CASS_ERROR_LIB_REQUEST_QUEUE_FULL,
                               "The request queue has reached capacity");
+    return;
   }
+
+
+  Atomic<size_t>& counter = io_worker_counters[reinterpret_cast<size_t>(uv_thread_self()) % 41];
+  io_workers_[counter.fetch_add(1) % io_workers_.size()]->send();
 }
 
 Future* Session::prepare(const char* statement, size_t length) {
@@ -276,6 +287,18 @@ Future* Session::prepare(const char* statement, size_t length) {
   execute(request_handler);
 
   return future;
+}
+
+bool Session::dequeue_request(RequestHandler*& request_handler) {
+  return request_queue_->dequeue(request_handler);
+  //if (!overwhelmed_request_queue_->dequeue(request_handler)) {
+  //  return request_queue_->dequeue(request_handler);
+  //}
+  return true;
+}
+
+bool Session::enqueue_overwhelmed_request(RequestHandler* request_handler) {
+  return overwhelmed_request_queue_->enqueue(request_handler);
 }
 
 void Session::on_add(const SharedRefPtr<Host>& host) {
@@ -344,8 +367,10 @@ void Session::on_error(CassError code, const std::string& message) {
   ScopedMutex l(&state_mutex_);
   state_.store(SESSION_STATE_CLOSING, MEMORY_ORDER_RELAXED);
   close();
-  connect_future_->set_error(code, message);
-  connect_future_.reset();
+  if (connect_future_) {
+    connect_future_->set_error(code, message);
+    connect_future_.reset();
+  }
 }
 
 void Session::on_worker_ready() {
@@ -357,11 +382,13 @@ void Session::on_worker_ready() {
   ScopedMutex l(&state_mutex_);
   if (state_.load(MEMORY_ORDER_RELAXED) == SESSION_STATE_CONNECTING) {
     state_.store(SESSION_STATE_CONNECTED, MEMORY_ORDER_RELAXED);
-  } else { // We recieved a 'force' close event
+  } else if (state_.load(MEMORY_ORDER_RELAXED) == SESSION_STATE_CLOSING) { // We recieved a 'force' close event
     close();
   }
-  connect_future_->set();
-  connect_future_.reset();
+  if (connect_future_) {
+    connect_future_->set();
+    connect_future_.reset();
+  }
 }
 
 bool Session::on_worker_closed() {
@@ -384,64 +411,5 @@ void Session::on_close() {
     close_future_.reset();
   }
 }
-
-#if 0
-#if UV_VERSION_MAJOR == 0
-void Session::on_execute(uv_async_t* data, int status) {
-#else
-void Session::on_execute(uv_async_t* data) {
-#endif
-  Session* session = static_cast<Session*>(data->data);
-
-  bool is_closing = false;
-
-  RequestHandler* request_handler = NULL;
-  while (session->request_queue_->dequeue(request_handler)) {
-    if (request_handler != NULL) {
-      request_handler->set_query_plan(session->new_query_plan(request_handler->request(),
-                                                              request_handler->encoding_cache()));
-
-      if (request_handler->timestamp() == CASS_INT64_MIN) {
-        request_handler->set_timestamp(session->cluster_->config().timestamp_gen()->next());
-      }
-
-      bool is_done = false;
-      while (!is_done) {
-        request_handler->next_host();
-
-        Address address;
-        if (!request_handler->get_current_host_address(&address)) {
-          request_handler->on_error(CASS_ERROR_LIB_NO_HOSTS_AVAILABLE,
-                                    "All connections on all I/O threads are busy");
-          break;
-        }
-
-        size_t start = session->current_io_worker_;
-        for (size_t i = 0, size = session->io_workers_.size(); i < size; ++i) {
-          const SharedRefPtr<IOWorker>& io_worker = session->io_workers_[start % size];
-          if (io_worker->is_host_available(address) &&
-              io_worker->execute(request_handler)) {
-            session->current_io_worker_ = (start + 1) % size;
-            is_done = true;
-            break;
-          }
-          start++;
-        }
-      }
-    } else {
-      is_closing = true;
-    }
-  }
-
-  if (is_closing) {
-    session->pending_workers_count_ = session->io_workers_.size();
-    for (IOWorkerVec::iterator it = session->io_workers_.begin(),
-                               end = session->io_workers_.end();
-         it != end; ++it) {
-      (*it)->close_async();
-    }
-  }
-}
-#endif
 
 } // namespace cass

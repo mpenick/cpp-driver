@@ -446,7 +446,9 @@ Cluster::Cluster()
   , pending_resolve_count_(0)
   , current_host_mark_(true)
   , closing_session_(NULL) {
-  // TODO(mpenick): Fix this
+  // TODO(mpenick): Fix this. Should metrics be per-cluster or per-session?
+  // If metrics are per cluster how do we handle per thread storage for an unknown
+  // number of threads...could we allocate a struct per thread?
   metrics_.reset(new Metrics(128));
   uv_mutex_init(&state_mutex_);
 }
@@ -470,7 +472,7 @@ int Cluster::init() {
 
 void Cluster::clear() {
   control_state_ = CONTROL_STATE_NEW;
-  load_balancing_policy_.reset(config_.load_balancing_policy());
+  load_balancing_policy_.reset(config_.load_balancing_policy()->new_instance());
   metadata_.clear();
   control_connection_ = NULL;
   reconnect_timer_.stop();
@@ -1443,7 +1445,7 @@ void Cluster::close_handles() {
   load_balancing_policy_->close_handles();
 }
 
-void Cluster::on_add(const SharedRefPtr<Host>& host) {
+void Cluster::on_add(const SharedRefPtr<Host>& host, bool is_initial_connection) {
   host->set_up();
 
   if (load_balancing_policy_->distance(host) == CASS_HOST_DISTANCE_IGNORE) {
@@ -1452,10 +1454,12 @@ void Cluster::on_add(const SharedRefPtr<Host>& host) {
 
   load_balancing_policy_->on_add(host);
 
-  ScopedMutex l(&state_mutex_);
-  for (std::vector<Session*>::iterator it = sessions_.begin(),
-       end = sessions_.end(); it != end; ++it) {
-    (*it)->on_add(host);
+  if (!is_initial_connection) {
+    ScopedMutex l(&state_mutex_);
+    for (std::vector<Session*>::iterator it = sessions_.begin(),
+         end = sessions_.end(); it != end; ++it) {
+      (*it)->on_add(host);
+    }
   }
 }
 
@@ -1537,6 +1541,11 @@ void Cluster::on_connection_ready() {
 
   load_balancing_policy_->init(current_host, hosts_);
   load_balancing_policy_->register_handles(loop());
+
+  for (HostMap::iterator it = hosts_.begin(),
+       end = hosts_.end(); it != end; ++it) {
+    on_add(it->second, true);
+  }
 
   {
     ScopedMutex l(&state_mutex_);

@@ -180,17 +180,12 @@ void Pool::remove_pending_request(RequestHandler* request_handler) {
 
 void Pool::set_is_available(bool is_available) {
   if (is_available) {
-    if (!is_available_ &&
-        available_connection_count_ > 0 &&
+    if (available_connection_count_ > 0 &&
         pending_requests_.size() < config_.pending_requests_low_water_mark()) {
-      io_worker_->set_host_is_available(address_, true);
       is_available_ = true;
     }
   } else {
-    if (is_available_) {
-      io_worker_->set_host_is_available(address_, false);
-      is_available_ = false;
-    }
+    is_available_ = false;
   }
 }
 

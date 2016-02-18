@@ -22,12 +22,13 @@
 #include "async_queue.hpp"
 #include "constants.hpp"
 #include "event_thread.hpp"
+#include "host.hpp"
+#include "load_balancing.hpp"
 #include "logger.hpp"
 #include "metrics.hpp"
 #include "spsc_queue.hpp"
 #include "timer.hpp"
-#include "host.hpp"
-#include "load_balancing.hpp"
+#include "token_map.hpp"
 
 #include <map>
 #include <string>
@@ -90,23 +91,19 @@ public:
     protocol_version_ = protocol_version;
   }
 
-  std::string keyspace();
+  std::string keyspace() const;
   void set_keyspace(const std::string& keyspace);
-
-  bool is_current_keyspace(const std::string& keyspace);
+  bool is_current_keyspace(const std::string& keyspace) const;
   void broadcast_keyspace_change(const std::string& keyspace);
 
-  void set_host_is_available(const Address& address, bool is_available);
-  bool is_host_available(const Address& address);
-
   bool is_host_up(const Address& address) const;
+
+  void send();
 
   bool ready_async(const SharedRefPtr<Host>& connected_host, const HostMap& hosts);
   bool add_pool_async(const Address& address);
   bool remove_pool_async(const Address& address, bool cancel_reconnect);
   void close_async();
-
-  bool execute(RequestHandler* request_handler);
 
   void retry(RequestHandler* request_handler);
   void request_finished(RequestHandler* request_handler);
@@ -138,6 +135,7 @@ private:
   typedef std::map<Address, SharedRefPtr<Pool> > PoolMap;
   typedef std::vector<SharedRefPtr<Pool> > PoolVec;
 
+  void internal_retry(RequestHandler* request_handler, PoolMap::iterator it);
   void schedule_reconnect(const Address& address);
 
 private:
@@ -148,20 +146,17 @@ private:
   int protocol_version_;
   uv_prepare_t prepare_;
 
-  std::string keyspace_;
-  uv_mutex_t keyspace_mutex_;
-
-  AddressSet unavailable_addresses_;
-  uv_mutex_t unavailable_addresses_mutex_;
-
   PoolMap pools_;
   PoolVec pools_pending_flush_;
   bool is_closing_;
   int pending_request_count_;
   int pending_pool_count_;
 
+  CopyOnWritePtr<std::string> keyspace_;
+
+  uv_async_t async_;
+  TokenMap token_map_;
   ScopedRefPtr<LoadBalancingPolicy> load_balancing_policy_;
-  AsyncQueue<SPSCQueue<RequestHandler*> > request_queue_;
 };
 
 } // namespace cass

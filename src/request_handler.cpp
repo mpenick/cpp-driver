@@ -71,9 +71,13 @@ void RequestHandler::set_io_worker(IOWorker* io_worker) {
 
 void RequestHandler::retry() {
   // Reset the request so it can be executed again
+  reset();
+  io_worker_->retry(this);
+}
+
+void RequestHandler::reset() {
   set_state(REQUEST_STATE_NEW);
   pool_ = NULL;
-  io_worker_->retry(this);
 }
 
 bool RequestHandler::get_current_host_address(Address* address) {

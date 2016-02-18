@@ -108,6 +108,8 @@ public:
 
   virtual void retry();
 
+  void reset();
+
   void set_query_plan(QueryPlan* query_plan) {
     query_plan_.reset(query_plan);
   }

@@ -100,6 +100,9 @@ public:
     return cluster_->protocol_version();
   }
 
+  bool dequeue_request(RequestHandler*& request_handler);
+  bool enqueue_overwhelmed_request(RequestHandler* request_handler);
+
   void on_add(const SharedRefPtr<Host>& host);
   void on_remove(const SharedRefPtr<Host>& host);
   void on_up(const SharedRefPtr<Host>& host);
@@ -116,20 +119,8 @@ public:
 private:
   void clear(const SharedRefPtr<Cluster>& cluster);
   int init();
-
   void close();
-
   void execute(RequestHandler* request_handler);
-
-#if 0
-#if UV_VERSION_MAJOR == 0
-  static void on_execute(uv_async_t* data, int status);
-#else
-  static void on_execute(uv_async_t* data);
-#endif
-#endif
-
-  void on_reconnect(Timer* timer);
 
 private:
   typedef std::vector<SharedRefPtr<IOWorker> > IOWorkerVec;
@@ -142,7 +133,9 @@ private:
   ScopedRefPtr<Future> close_future_;
 
   IOWorkerVec io_workers_;
+  Atomic<size_t> io_worker_counters[41];
   ScopedPtr<MPMCQueue<RequestHandler*> > request_queue_;
+  ScopedPtr<MPMCQueue<RequestHandler*> > overwhelmed_request_queue_;
   int pending_resolve_count_;
 };
 

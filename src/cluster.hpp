@@ -279,7 +279,7 @@ private:
   void close_handles();
 
 private:
-  void on_add(const SharedRefPtr<Host>& host);
+  void on_add(const SharedRefPtr<Host>& host, bool is_initial_connection = false);
   void on_remove(const SharedRefPtr<Host>& host);
   void on_up(const Address& address);
   void on_down(const Address& address);
