@@ -56,7 +56,8 @@ public:
     , stream_(-1)
     , state_(REQUEST_STATE_NEW)
     , cl_(CASS_CONSISTENCY_UNKNOWN)
-    , timestamp_(CASS_INT64_MIN) { }
+    , timestamp_(CASS_INT64_MIN)
+    , start_time_ns_(uv_hrtime()){ }
 
   virtual ~Handler() {}
 

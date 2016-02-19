@@ -313,8 +313,8 @@ void IOWorker::on_execute(uv_async_t* async) {
       PoolMap::iterator it = io_worker->pools_.find(address);
       if (it != io_worker->pools_.end() && it->second->is_available()) {
         io_worker->pending_request_count_++;
-        request_handler->set_io_worker(io_worker);
         request_handler->reset();
+        request_handler->set_io_worker(io_worker);
         io_worker->internal_retry(request_handler, it);
         break;
       }

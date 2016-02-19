@@ -262,7 +262,10 @@ void Session::execute(RequestHandler* request_handler) {
     request_handler->on_error(CASS_ERROR_LIB_NO_HOSTS_AVAILABLE,
                               "Session is not connected");
     return;
-  } else if (!request_queue_->enqueue(request_handler)) {
+  }
+
+
+  if (!request_queue_->enqueue(request_handler)) {
     request_handler->on_error(CASS_ERROR_LIB_REQUEST_QUEUE_FULL,
                               "The request queue has reached capacity");
     return;
@@ -270,6 +273,7 @@ void Session::execute(RequestHandler* request_handler) {
 
 
   Atomic<size_t>& counter = io_worker_counters[reinterpret_cast<size_t>(uv_thread_self()) % 41];
+  MPMCQueue<RequestHandler*>::memory_fence();
   io_workers_[counter.fetch_add(1) % io_workers_.size()]->send();
 }
 

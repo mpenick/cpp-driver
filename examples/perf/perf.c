@@ -40,7 +40,7 @@
  * roughly analyzing performance.
  */
 
-#define NUM_THREADS 1
+#define NUM_THREADS 2
 #define NUM_IO_WORKER_THREADS 4
 #define NUM_CONCURRENT_REQUESTS 10000
 #define NUM_ITERATIONS 1000
@@ -273,7 +273,7 @@ void select_from_perf(CassSession* session, const char* query, const CassPrepare
       print_error(future);
     } else {
       const CassResult* result = cass_future_get_result(future);
-      assert(cass_result_column_count(result) == 5);
+      assert(cass_result_column_count(result) == 6);
       cass_result_free(result);
     }
     cass_future_free(future);
