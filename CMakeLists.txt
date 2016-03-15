@@ -245,31 +245,6 @@ if(CASS_USE_TCMALLOC)
   set(CASS_LIBS ${CASS_LIBS} ${GPERFLIBRARY_LIBRARY})
 endif()
 
-# SparseHash
-if(CASS_USE_SPARSEHASH)
-  # Setup the paths and hints for sparsehash
-  set(_SPARSEHASH_ROOT_PATHS "${PROJECT_SOURCE_DIR}/lib/sparsehash/")
-  set(_SPARSEHASH_ROOT_HINTS ${SPARSEHASH_ROOT_DIR} $ENV{SPARSEHASH_ROOT_DIR})
-  if(NOT WIN32)
-    set(_SPARSEHASH_ROOT_PATHS ${_SPARSEHASH_ROOT_PATHS} "/usr/" "/usr/local/")
-  endif()
-  set(_SPARSEHASH_ROOT_HINTS_AND_PATHS
-    HINTS ${_SPARSEHASH_ROOT_HINTS}
-    PATHS ${_SPARSEHASH_ROOT_PATHS})
-
-  # Ensure sparsehash headers were found
-  find_path(SPARSEHASH_INCLUDE_DIR
-    NAMES google/dense_hash_map
-    HINTS ${_SPARSEHASH_INCLUDE_DIR} ${_SPARSEHASH_ROOT_HINTS_AND_PATHS}
-    PATH_SUFFIXES include)
-  find_package_handle_standard_args(SparseJash "Could NOT find sparsehash, try to set the path to the sparsehash root folder in the system variable SPARSEHASH_ROOT_DIR"
-    SPARSEHASH_INCLUDE_DIR)
-
-  if (SPARSEHASH_INCLUDE_DIR)
-    add_definitions("-DCASS_USE_SPARSEHASH")
-  endif()
-endif()
-
 # zlib
 if(CASS_USE_ZLIB)
   # Setup the root directory for zlib
@@ -537,8 +512,14 @@ else()
   endif()
 endif()
 
+# HdrHistogram
 set(SRC_FILES ${SRC_FILES}
   ${PROJECT_SOURCE_DIR}/src/third_party/hdr_histogram/hdr_histogram.cpp)
+
+# SparseHash
+add_subdirectory(src/third_party/sparsehash)
+set(CASS_INCLUDES ${CASS_INCLUDES} ${PROJECT_SOURCE_DIR}/src/third_party/sparsehash/src)
+add_definitions("-DCASS_USE_SPARSEHASH")
 
 # Determine if OpenSSL should be compiled in (or not)
 if(CASS_USE_OPENSSL)
