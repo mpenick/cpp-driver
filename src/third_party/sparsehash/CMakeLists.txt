@@ -5,15 +5,24 @@ include(CheckFunctionExists)
 include(CheckIncludeFile)
 include(CheckTypeSize)
 
-#include(TestCXXAcceptsFlag)
-#check_cxx_accepts_flag("-std=c++11" HAVE_CXX11)
-#if(HAVE_CXX11)
-#  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -std=c++11")
-#endif()
+include(TestCXXAcceptsFlag)
 
 set(HASH_NAME hash)
 
+set(SAVED_CMAKE_REQUIRED_QUIET ${CMAKE_REQUIRED_FLAGS_QUIET})
+set(SAVED_CMAKE_REQUIRED_FLAGS ${CMAKE_REQUIRED_FLAGS})
+
+set(CMAKE_REQUIRED_QUIET TRUE)
+
+check_cxx_accepts_flag("-std=c++11" HAVE_CXX11)
+if(HAVE_CXX11)
+  set(CMAKE_REQUIRED_FLAGS "${CMAKE_REQUIRED_FLAGS} -std=c++11")
+endif()
+
 foreach(LOCATION unordered_map;tr1/unordered_map)
+  if (HASH_NAMESPACE)
+    break()
+  endif()
   foreach(NAMESPACE std;std::tr1)
     unset(HAVE_UNORDERED_MAP CACHE)
     check_cxx_source_compiles(
@@ -32,7 +41,13 @@ foreach(LOCATION unordered_map;tr1/unordered_map)
 endforeach(LOCATION)
 
 foreach(LOCATION hash_map;ext/hash_map)
+  if (HASH_NAMESPACE)
+    break()
+  endif()
   foreach(NAMESPACE std;stdext)
+    if (HASH_NAMESPACE)
+      break()
+    endif()
     unset(HAVE_HASH_MAP CACHE)
     check_cxx_source_compiles(
       "
@@ -53,9 +68,10 @@ if(NOT HASH_NAMESPACE)
   message(FATAL_ERROR "Unable to determine the standard hash namespace")
 endif()
 
-message(STATUS "Namespace: ${HASH_NAMESPACE}")
-
 foreach(LOCATION functional;tr1/functional;ext/hash_fun.h;ext/stl_hash_fun.h;hash_fun.h;stl_hash_fun.h;stl/_hash_fun.h)
+  if (HASH_FUN_H)
+    break()
+  endif()
   unset(HAVE_HASH_FUNC_HEADER CACHE)
   check_cxx_source_compiles(
     "
@@ -69,10 +85,13 @@ foreach(LOCATION functional;tr1/functional;ext/hash_fun.h;ext/stl_hash_fun.h;has
 endforeach(LOCATION)
 
 if(NOT HASH_FUN_H)
-  message(FATAL_ERROR "Unable to find standarde hash header file")
+  message(FATAL_ERROR "Unable to find standard hash header file")
 endif()
 
-message(STATUS "Header: ${HASH_FUN_H}")
+message(STATUS "Using hash header <${HASH_FUN_H}> and namespace \"${HASH_NAMESPACE}\"")
+
+set(CMAKE_REQUIRED_QUIET ${SAVED_CMAKE_REQUIRED_QUIET})
+set(CMAKE_REQUIRED_FLAGS ${SAVED_CMAKE_REQUIRED_FLAGS})
 
 check_include_file(inttypes.h HAVE_INTTYPES_H)
 check_include_file(stdint.h HAVE_STDINT_H)
