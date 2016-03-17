@@ -21,6 +21,7 @@
 #include "buffer.hpp"
 #include "cassandra.h"
 #include "handler.hpp"
+#include "hash.hpp"
 #include "list.hpp"
 #include "macros.hpp"
 #include "metrics.hpp"
@@ -110,9 +111,9 @@ public:
 
   const Config& config() const { return config_; }
   Metrics* metrics() { return metrics_; }
-  const Address& address() { return address_; }
-  const std::string& address_string() { return addr_string_; }
-  const std::string& keyspace() { return keyspace_; }
+  const Address& address() const { return address_; }
+  const std::string& address_string() const { return addr_string_; }
+  const std::string& keyspace() const { return keyspace_; }
 
   void close();
   void defunct();
@@ -338,5 +339,19 @@ private:
 };
 
 } // namespace cass
+
+
+namespace  std {
+
+template<>
+struct hash<cass::Connection*> {
+  std::size_t operator()(const cass::Connection* c) const {
+    return hash(c->address());
+  }
+  std::hash<cass::Address> hash;
+};
+
+} // namespace std
+
 
 #endif

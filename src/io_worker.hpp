@@ -28,7 +28,8 @@
 #include "spsc_queue.hpp"
 #include "timer.hpp"
 
-#include <map>
+#include <sparsehash/dense_hash_map>
+
 #include <string>
 #include <uv.h>
 
@@ -127,7 +128,7 @@ private:
 #endif
 
 private:
-  typedef std::map<Address, SharedRefPtr<Pool> > PoolMap;
+  typedef sparsehash::dense_hash_map<Address, SharedRefPtr<Pool> > PoolMap;
   typedef std::vector<SharedRefPtr<Pool> > PoolVec;
 
   void schedule_reconnect(const Address& address);
