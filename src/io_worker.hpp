@@ -71,8 +71,9 @@ public:
 
   int init();
 
-  bool is_closing() const { return state_ == IO_WORKER_STATE_CLOSING; }
-  bool is_ready() const { return state_ == IO_WORKER_STATE_READY; }
+  bool is_closing() const { return state_.load() == IO_WORKER_STATE_CLOSING; }
+  bool is_closed() const { return state_.load() == IO_WORKER_STATE_CLOSED; }
+  bool is_ready() const { return state_.load() == IO_WORKER_STATE_READY; }
 
   const Config& config() const { return config_; }
   Metrics* metrics() const { return metrics_; }
@@ -90,16 +91,11 @@ public:
   bool is_current_keyspace(const std::string& keyspace);
   void broadcast_keyspace_change(const std::string& keyspace);
 
-  void set_host_is_available(const Address& address, bool is_available);
-  bool is_host_available(const Address& address);
-
   bool is_host_up(const Address& address) const;
 
   bool add_pool_async(const Address& address, bool is_initial_connection);
   bool remove_pool_async(const Address& address, bool cancel_reconnect);
   void close_async();
-
-  bool execute(RequestHandler* request_handler);
 
   void retry(RequestHandler* request_handler);
   void request_finished(RequestHandler* request_handler);
@@ -108,6 +104,8 @@ public:
   void notify_pool_closed(Pool* pool);
 
   void add_pending_flush(Pool* pool);
+
+  void send();
 
 private:
   void add_pool(const Address& address, bool is_initial_connection);
@@ -131,10 +129,11 @@ private:
   typedef std::map<Address, SharedRefPtr<Pool> > PoolMap;
   typedef std::vector<SharedRefPtr<Pool> > PoolVec;
 
+  void internal_retry(RequestHandler* request_handler, PoolMap::iterator it);
   void schedule_reconnect(const Address& address);
 
 private:
-  State state_;
+  Atomic<State> state_;
   Session* session_;
   const Config& config_;
   Metrics* metrics_;
@@ -144,15 +143,12 @@ private:
   std::string keyspace_;
   uv_mutex_t keyspace_mutex_;
 
-  AddressSet unavailable_addresses_;
-  uv_mutex_t unavailable_addresses_mutex_;
-
   PoolMap pools_;
   PoolVec pools_pending_flush_;
   bool is_closing_;
   int pending_request_count_;
 
-  AsyncQueue<SPSCQueue<RequestHandler*> > request_queue_;
+  uv_async_t async_;
 };
 
 } // namespace cass

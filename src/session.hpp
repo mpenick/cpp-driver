@@ -105,6 +105,8 @@ public:
     return control_connection_.protocol_version();
   }
 
+  bool dequeue_request(RequestHandler*& request_handler);
+
 private:
   void clear(const Config& config);
   int init();
@@ -170,6 +172,7 @@ private:
 
   IOWorkerVec io_workers_;
   ScopedPtr<AsyncQueue<MPMCQueue<RequestHandler*> > > request_queue_;
+  ScopedPtr<MPMCQueue<RequestHandler*> > io_request_queue_;
   Metadata metadata_;
   ControlConnection control_connection_;
   bool current_host_mark_;

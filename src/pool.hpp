@@ -66,6 +66,7 @@ public:
 
   const Address& address() const { return address_; }
 
+  bool is_available() const { return is_available_; }
   bool is_initial_connection() const { return is_initial_connection_; }
   bool is_ready() const { return state_ == POOL_STATE_READY; }
   bool is_critical_failure() const { return is_critical_failure_; }

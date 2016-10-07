@@ -177,6 +177,8 @@ int Session::init() {
   if (rc != 0) return rc;
   request_queue_.reset(
       new AsyncQueue<MPMCQueue<RequestHandler*> >(config_.queue_size_io()));
+  io_request_queue_.reset(
+        new MPMCQueue<RequestHandler*>(config_.queue_size_io()));
   rc = request_queue_->init(loop(), this, &Session::on_execute);
   if (rc != 0) return rc;
 
@@ -602,6 +604,10 @@ Future* Session::execute(const RoutableRequest* request) {
   return future;
 }
 
+bool Session::dequeue_request(RequestHandler*& request_handler) {
+  return io_request_queue_->dequeue(request_handler);
+}
+
 #if UV_VERSION_MAJOR == 0
 void Session::on_execute(uv_async_t* data, int status) {
 #else
@@ -621,33 +627,18 @@ void Session::on_execute(uv_async_t* data) {
         request_handler->set_timestamp(session->config_.timestamp_gen()->next());
       }
 
-      bool is_done = false;
-      while (!is_done) {
-        request_handler->next_host();
-
-        Address address;
-        if (!request_handler->get_current_host_address(&address)) {
-          request_handler->on_error(CASS_ERROR_LIB_NO_HOSTS_AVAILABLE,
-                                    "All connections on all I/O threads are busy");
-          break;
-        }
-
-        size_t start = session->current_io_worker_;
-        for (size_t i = 0, size = session->io_workers_.size(); i < size; ++i) {
-          const SharedRefPtr<IOWorker>& io_worker = session->io_workers_[start % size];
-          if (io_worker->is_host_available(address) &&
-              io_worker->execute(request_handler)) {
-            session->current_io_worker_ = (start + 1) % size;
-            is_done = true;
-            break;
-          }
-          start++;
-        }
+      if (!session->io_request_queue_->enqueue(request_handler)) {
+        request_handler->on_error(CASS_ERROR_LIB_NO_HOSTS_AVAILABLE,
+                                  "All connections on all I/O threads are busy");
+        break;
       }
+
     } else {
       is_closing = true;
     }
   }
+
+  session->io_workers_[session->current_io_worker_++ % session->io_workers_.size()]->send();
 
   if (is_closing) {
     session->pending_workers_count_ = session->io_workers_.size();
