@@ -63,7 +63,6 @@ class Decoder {
 public:
   Decoder()
       : input_(NULL)
-      , length_(0)
       , remaining_(0)
       , type_("") {}
 
@@ -71,7 +70,6 @@ public:
           ProtocolVersion protocol_version = ProtocolVersion::highest_supported())
       : protocol_version_(protocol_version)
       , input_(input)
-      , length_(length)
       , remaining_(length)
       , type_("") {}
 
@@ -563,8 +561,6 @@ public:
 
   bool is_null() const { return input_ == NULL; }
 
-protected:
-  // Testing only
   inline const char* buffer() const { return input_; }
 
   inline size_t remaining() const { return remaining_; }
@@ -572,7 +568,6 @@ protected:
 private:
   ProtocolVersion protocol_version_;
   const char* input_;
-  size_t length_;
   size_t remaining_;
   const char* type_;
 

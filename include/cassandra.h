@@ -9750,6 +9750,42 @@ cass_error_result_arg_type(const CassErrorResult* error_result,
 
 /***********************************************************************************
  *
+ * Cursor
+ *
+ ***********************************************************************************/
+
+typedef struct CassCursor_ {
+  const CassResult* result;
+  const cass_int32_t row_count, column_count;
+  const char *column, *end;
+  cass_int32_t column_size;
+  CassError error_code;
+} CassCursor;
+
+CASS_EXPORT CassCursor
+cass_cursor(const CassResult* result);
+
+CASS_EXPORT cass_bool_t 
+cass_cursor_next(CassCursor* cursor);
+
+CASS_EXPORT cass_int8_t
+cass_cursor_get_int8(const CassCursor* cursor);
+
+CASS_EXPORT cass_int16_t
+cass_cursor_get_int16(const CassCursor* cursor);
+
+CASS_EXPORT cass_int32_t
+cass_cursor_get_int32(const CassCursor* cursor);
+
+CASS_EXPORT void
+cass_cursor_get_string(const CassCursor* cursor,
+                       const char** output,
+                       size_t* output_size);
+
+/* More type here */
+
+/***********************************************************************************
+ *
  * Iterator
  *
  ***********************************************************************************/
